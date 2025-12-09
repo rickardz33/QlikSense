@@ -1,0 +1,1109 @@
+///$tab Main
+SET ThousandSep=' ';
+SET DecimalSep=',';
+SET MoneyThousandSep=' ';
+SET MoneyDecimalSep=',';
+SET MoneyFormat='# ##0,00 kr;-# ##0,00 kr';
+SET TimeFormat='hh:mm:ss';
+SET DateFormat='YYYY-MM-DD';
+SET TimestampFormat='YYYY-MM-DD hh:mm:ss[.fff]';
+SET FirstWeekDay=0;
+SET BrokenWeeks=0;
+SET ReferenceDay=4;
+SET FirstMonthOfYear=1;
+SET CollationLocale='sv-SE';
+SET CreateSearchIndexOnReload=1;
+SET MonthNames='jan.;feb.;mars;apr.;maj;juni;juli;aug.;sep.;okt.;nov.;dec.';
+SET LongMonthNames='januari;februari;mars;april;maj;juni;juli;augusti;september;oktober;november;december';
+SET DayNames='mån;tis;ons;tors;fre;lör;sön';
+SET LongDayNames='måndag;tisdag;onsdag;torsdag;fredag;lördag;söndag';
+SET NumericalAbbreviation='3:k;6:M;9:G;12:T;15:P;18:E;21:Z;24:Y;-3:m;-6:μ;-9:n;-12:p;-15:f;-18:a;-21:z;-24:y';
+
+
+Set vTimeFormat = DATE($1,'YYYY-MM-DD hh:mm') as $1;
+Let vReloadTime	= ConvertToLocalTime(ReloadTime(), 'Stockholm');
+
+SET vDevelop=0;
+SET vDebug=0;
+
+
+//LET vStartDateHistory=Date(AddMonths(YearStart(Today(),-0,6),-15),'YYYY-MM-DD'); //Ändrat då vi i ovan bara fick med oss 13 månader när vi gick in i mars... 250311 AL
+Let vStartDateHistory				=Date(MakeDate(2023,1,1),'YYYY-MM-DD'); //Ändrat från 5 till 4, för att få med en extra månad, 220502 OP //Ändrat från 4 till 3, 230413 OP
+//Let vStartDateHistory_DispatchOrder	=Date(AddMonths(MonthStart(Today()-1),-2),'YYYY-MM-DD'); //Ändrat från 5 till 4, för att få med en extra månad, 220502 OP //Ändrat från 4 till 3, 230413 OP
+Let vStartDateHistory_DispatchOrder	=Date(MakeDate(2023,1,1),'YYYY-MM-DD'); //Ändrat från 5 till 4, för att få med en extra månad, 220502 OP //Ändrat från 4 till 3, 230413 OP
+
+
+SET vFastReload = 0;
+
+IF vFastReload = 1 then
+	Let vStartDateHistory				=Date(MakeDate(2025,10,1),'YYYY-MM-DD'); //Ändrat från 5 till 4, för att få med en extra månad, 220502 OP //Ändrat från 4 till 3, 230413 OP
+	Let vStartDateHistory_DispatchOrder	=Date(MakeDate(2025,10,1),'YYYY-MM-DD'); //Ändrat från 5 till 4, för att få med en extra månad, 220502 OP //Ändrat från 4 till 3, 230413 OP
+EndIf
+///$tab Droppoint
+DropPoint:
+LOAD
+
+	%_SHORTR08 &'|'& DELADR as keyDispatchOrderDroppoint,
+    DELADR,
+	LOADSEQ
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/DropPoint.qvd] (qvd)
+;
+///$tab ELDC
+/*
+Qualify *;
+LOAD
+    PlanDate,
+    Land,
+    Ordertyp,
+    "partgrp2 (partgrp2)",
+    CGM,
+    CGM_Grupp,
+    CGM_Kategori,
+    PB.Date,
+    PB_445.Year,
+    "Del Qty (delquant)",
+    "Status (linestat)",
+    "Actual Vol (realvol)",
+    DispatchOrderGroup.LineId.OldDef2
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/ELDC_data.qvd]
+(qvd);
+
+
+
+Unqualify *;
+
+
+ELDC_:
+Load * ,
+text((Year(ELDC_data.PB.Date))) as ELDC_data.PD.År,
+Left([ELDC_data.CGM_Grupp],3) & '|' & text((Year(ELDC_data.PB.Date))) &  text((NUM(Week(ELDC_data.PB.Date, 0, 1),'00'))) as @CG_PD_ÅrVecka
+//Week(ELDC_data.PlanDate, 0, 1) as Eldc_ÅrVecka
+Resident ELDC_data;
+
+Drop Table ELDC_data;
+Rename Table ELDC_ to ELDC_data;
+	
+*/
+
+///$tab Artikel
+Artikel:
+LOAD
+    Artikel,
+    @Artikel,
+    SHORTL62_1,
+    SHORTL62_2,
+    Artikel.RegDate,
+    Artikel.LastUpdateDate,
+    SU_längd_AST,
+    SU_bredd_AST,
+    SU_höjd_AST,
+    HU_längd_AST,
+    HU_bredd_AST,
+    HU_höjd_AST,
+    SU_vikt_AST,
+    SU_volym_AST,
+    HU_volym_AST_HU_LxBxH,
+    HU_vikt_AST_SUwghtXhuqty,
+    HU_volym_AST_LxBxH,
+    HUQTY,
+    Balance,
+    Har_saldo_Astro,
+    Beskrivning,
+    PMHA,
+    PZONE,
+    PZONE_1,
+    PZONE_2,
+    Zone,
+    WMHA,
+    WLDCT,
+    PartWeight,
+    PartVolume,
+    CQUANT,
+    NOPLEVEL,
+    "Qty/Tote (SU)",
+    "Qty/Tray (SU)",
+    "Qty/Tote (HU)",
+    "Qty/Tray (HU)",
+    Kubskannad,
+    %_CGMId,
+    PARTGRP2,
+    Partgrp2_grp,
+    FEFO,
+    SERNOPRC,
+    L62STAKP,
+    "WCS/SAT (SU)",
+    "WCS/SAT (HU)",
+    CrossPack,
+    ArtStruktur,
+    ART_haft_saldo_NDC,
+    CGM_Desc.Label,
+    BoxTyp_SU,
+    E_HUWGHT,
+    E_HUVOL,
+    SU_PALLZ,
+    HU_PALLZ,
+    L62T90flagga,
+    RegDate_L62T90,
+    UpdDate_L62T90,
+    PIM.STATUS,
+    PIM.ONLINEARTICLE_CODE,
+    PIM.ONLINEARTICLE_NAME,
+    PIM.GENERAL_ITEM_CATEGORY_GROUP,
+    RoundingProfile_Flagga
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Artikel.qvd] (qvd);
+
+CGM:
+LOAD
+    CGM,
+    %_CGMId,
+    CGM_flagga,
+    CGM_KategoriId,
+    CGM_Kategori_namn,
+    CGM_Kategori,
+    CGM_GruppId,
+    CGM_Grupp_namn,
+    CGM_Grupp,
+    CGM_ModellId,
+    CGM_Modell_namn,
+    CGM_Modell
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/CGM.qvd] (qvd);
+
+CG:
+LOAD
+    LEFT(%_CGMId,3) as @CGID,
+    CGM_KategoriId as CG_KategoriId,
+    CGM_Kategori_namn as CG_Kategori_namn,
+    CGM_Kategori as CG_Kategori,
+    CGM_GruppId as CG_GruppId,
+    CGM_Grupp_namn as CG_Grupp_namn,
+    CGM_Grupp as CG_Grupp
+Resident CGM;
+
+MAP_CG_FROM_ARTICLE:
+Mapping
+Load
+	@Artikel,
+	Left(%_CGMId,3) as CGID
+Resident Artikel;
+
+
+
+///$tab Transactions (DispatchOrder)
+IF vDevelop = 0 then
+
+FOR Each vFile in FileList('[lib://Analyse customer order prognosapp combine DATA:DataFiles/DispatchOrder_20*.qvd]')
+	IF Num(MonthStart(Date#(Left(Right('$(vFile)',11),7),'YYYY-MM'))) >= Num(MonthStart(vStartDateHistory_DispatchOrder)) THEN
+
+      DispatchOrder:
+      LOAD
+          WH,
+          Ordernummer,
+          %_REGDATE,
+          %_REGTIME,
+          ORDSTAT,
+          OrdertypId,
+          IF(KundtypOrder = 'Residue', 'Restorder', KundtypOrder) as KundtypOrder,
+      //    KundtypOrder,
+          Campaign,
+          "Hub/Butik",
+          "Hub/ButikId",
+          @HubButik,
+          Land,
+          ORDLINE,
+          %_SHORTR08,
+          LINESTAT,
+          REALVOL,
+          DELQUANT,
+          DispatchOrderGroup.LineId.OldDef,
+          @Artikel,
+          CampaignGroup,
+          Ordertyp,
+          PostNr,
+          %_SHORTR08 &'|'& "Hub/ButikId" as keyDispatchOrderDroppoint,
+		ApplyMap('MAP_CG_FROM_ARTICLE',  @Artikel) as @CGID,
+		'DispatchOrder' as Source
+      //FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/DispatchOrder_20*.qvd] (qvd);
+      FROM $(vFile)(qvd);
+
+    END IF
+NEXT vFile
+
+
+
+
+End If
+///$tab Hub, butik, transportör, vendor
+/*
+HubButik:
+LOAD
+    @HubButik,
+    HB_Land,
+    HB_Ort,
+    HB_PostNr
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/HubButik.qvd] (qvd);
+*/
+/*
+//Finns numera i "Trip"
+Transportör:
+LOAD
+    %_SHORTR08,
+    RegNr,
+    Transportör,
+    CARRIERW,
+    CARRIERH,
+    XDTRUCK,
+    BOOKEDLM
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Transportör.qvd] (qvd);
+*/
+
+
+Vendor:
+LOAD
+    @Artikel,
+    VendorId,
+    Vendor,
+    Vendor_City,
+    Vendor_Country,
+    Vendor_Zip,
+    "Vendor_Planned Delivery-time in Days",
+    VendorGroupId,
+    VendorGroup,
+    VendorGroup_Country
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Vendor.qvd] (qvd);
+
+
+///$tab Trip
+Trip:
+LOAD
+    ExternalTripId,
+    %_SHORTR08,
+    PlanDate,
+    PlanDate as @PlanDate, 
+    RouteSchedule,
+    TripSeq,
+    Trip,
+    "Car number",
+    Trip.Status,
+    Trip.Status.Id,
+    StatusDate_Trip,
+    StopTime,
+    PB.DateTime,
+    @PB.Date,
+    PB.Time,
+    Departure.DateTime,
+    %_Trip.DEPDATE,
+    Departure.Date,
+    Departure.Time,
+    RegNr,
+    Transportör,
+    CARRIERW,
+    CARRIERH,
+    XDTRUCK,
+    Booked_LM,
+    Transit,
+    MultiPick,
+    MultiPick_stopp,
+    MultiPick_FirstSite,
+    MultiPick_,
+    Transit_,
+    Trip_typ
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Trip.qvd]
+(qvd);
+
+
+///$tab Calendars
+MasterCalendar:
+LOAD
+    Datum,
+    Vecka,
+    Vecka_jämförbar,
+    År,
+    Månad,
+    ÅrMånad,
+    Dag,
+    MånadDag,
+    Kvartal,
+    VeckaÅr,
+    ÅrVecka,
+    Veckodag,
+    f_Månad,
+    f_År,
+    f_År_num,
+    _FULL_LY,
+    _FULL_TY,
+    _YTD_TY,
+    _YTD_LY,
+    _FULL_LY_Fiscal,
+    _FULL_TY_Fiscal,
+    _YTD_TY_Fiscal,
+    _YTD_LY_Fiscal,
+    _FULL_TQ_TY,
+    _FULL_TQ_LY,
+    _FULL_PRQ,
+    _QTD_TY,
+    _QTD_LY,
+    _PR_QTD,
+    _FULL_TM_TY,
+    _FULL_TM_LY,
+    _FULL_PRM,
+    _MTD_TY,
+    _MTD_LY,
+    _PR_MTD,
+    _FULL_TW_TY,
+    _FULL_TW_LY,
+    _FULL_PRW,
+    _WTD_TY,
+    _PR_WTD,
+    %_REGDATE,
+    f_Quarter,
+    f_Månad_Namn
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/MasterCalendar.qvd] (qvd)
+Where Datum >= Date('$(vStartDateHistory)') and Datum<=Date(YearEnd(today()+365))
+;
+
+PlanDateCalendar:
+Load *,
+If(PD.Vecka='01',Month(MakeDate(PD.År,1,1)), 
+	if(match(PD.Vecka,'52','53'),Month(MakeDate(PD.År,12,1)),PD.Månad_TMP)
+	)					as PD.Månad
+;					
+LOAD
+    Datum 				as @PlanDate,
+    Datum 				as PD.Datum,
+    Vecka				as PD.Vecka,
+    Vecka_jämförbar		as PD.Vecka_jämförbar,
+    //År					as PD.År,
+    Left([ÅrVecka],4)	as PD.År,
+    Månad				as PD.Månad_TMP,
+	
+    ÅrMånad				as PD.ÅrMånad,
+    Dag					as PD.Dag,
+    MånadDag			as PD.MånadDag,
+    Kvartal				as PD.Kvartal,
+    VeckaÅr				as PD.VeckaÅr,
+    ÅrVecka				as PD.ÅrVecka,
+    [ÅrVecka]			as @PD.ÅrVecka,
+    Veckodag			as PD.Veckodag
+//     f_Månad,
+//     f_År,
+//     f_År_num,
+//     _FULL_LY,
+//     _FULL_TY,
+//     _YTD_TY,
+//     _YTD_LY,
+//     _FULL_LY_Fiscal,
+//     _FULL_TY_Fiscal,
+//     _YTD_TY_Fiscal,
+//     _YTD_LY_Fiscal,
+//     _FULL_TQ_TY,
+//     _FULL_TQ_LY,
+//     _FULL_PRQ,
+//     _QTD_TY,
+//     _QTD_LY,
+//     _PR_QTD,
+//     _FULL_TM_TY,
+//     _FULL_TM_LY,
+//     _FULL_PRM,
+//     _MTD_TY,
+//     _MTD_LY,
+//     _PR_MTD,
+//     _FULL_TW_TY,
+//     _FULL_TW_LY,
+//     _FULL_PRW,
+//     _WTD_TY,
+//     _PR_WTD,
+//     %_REGDATE,
+//     f_Quarter,
+//     f_Månad_Namn
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/MasterCalendar.qvd] (qvd)
+Where Datum >= Date('$(vStartDateHistory)') and Datum<=Date(YearEnd(today()+365))
+;
+Drop Field PD.Månad_TMP;
+
+WeekBased445_EG:
+LOAD
+    %_REGDATE,
+    WeekBased445_EG.Date,
+    WeekBased445_EG.DayOfMonth,
+    WeekBased445_EG.DayOfQuarter,
+    WeekBased445_EG.DayOfYear,
+    WeekBased445_EG.Month,
+    WeekBased445_EG.MonthOfQuarter,
+    WeekBased445_EG.MonthStart,
+    WeekBased445_EG.Quarter,
+    WeekBased445_EG.QuarterStart,
+    WeekBased445_EG.Week,
+    WeekBased445_EG.WeekDay,
+    WeekBased445_EG.WeekOfMonth,
+    WeekBased445_EG.WeekStart,
+    WeekBased445_EG.Year,
+    WeekBased445_EG.YearMonth,
+    WeekBased445_EG.YearQuarter,
+    WeekBased445_EG.YearStart,
+    WeekBased445_EG.YearWeek
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/WeekBased445_EG.qvd] (qvd)
+;
+
+PD_WeekBased445_EG:
+LOAD
+    %_REGDATE as @PlanDate,
+    WeekBased445_EG.Date as PD_445.Date,
+    WeekBased445_EG.DayOfMonth as PD_445.DayOfMonth,
+    WeekBased445_EG.DayOfQuarter as PD_445.DayOfQuarter,
+    WeekBased445_EG.DayOfYear as PD_445.DayOfYear,
+    WeekBased445_EG.Month as PD_445.Month,
+    WeekBased445_EG.MonthOfQuarter as PD_445.MonthOfQuarter,
+    WeekBased445_EG.MonthStart as PD_445.MonthStart,
+    WeekBased445_EG.Quarter as PD_445.Quarter,
+    WeekBased445_EG.QuarterStart as PD_445.QuarterStart,
+    WeekBased445_EG.Week as PD_445.Week,
+    WeekBased445_EG.WeekDay as PD_445.WeekDay,
+    WeekBased445_EG.WeekOfMonth as PD_445.WeekOfMonth,
+    WeekBased445_EG.WeekStart as PD_445.WeekStart,
+    WeekBased445_EG.Year as PD_445.Year,
+    WeekBased445_EG.YearMonth as PD_445.YearMonth,
+    WeekBased445_EG.YearQuarter as PD_445.YearQuarter,
+    WeekBased445_EG.YearStart as PD_445.YearStart,
+    WeekBased445_EG.YearWeek as PD_445.YearWeek
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/WeekBased445_EG.qvd] (qvd)
+;
+/*
+PB_date_445:
+LOAD
+    @PB.Date,
+    PB_445.Date,
+    PB_445.DayOfMonth,
+    PB_445.DayOfQuarter,
+    PB_445.DayOfYear,
+    PB_445.Month,
+    PB_445.MonthOfQuarter,
+    PB_445.MonthStart,
+    PB_445.Quarter,
+    PB_445.QuarterStart,
+    PB_445.Week,
+    PB_445.WeekDay,
+    PB_445.WeekOfMonth,
+    PB_445.WeekStart,
+    PB_445.Year,
+    PB_445.YearMonth,
+    PB_445.YearQuarter,
+    PB_445.YearStart,
+    PB_445.YearWeek
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/PB_445.qvd] (qvd);
+*/
+
+LastDispatchDate:
+LOAD
+    %_Trip.DEPDATE,
+    LastDispatchDate.Vecka,
+    LastDispatchDate.År,
+    LastDispatchDate.Månad,
+    LastDispatchDate.Dag,
+    LastDispatchDate.Kvartal,
+    LastDispatchDate.VeckaÅr,
+    LastDispatchDate.ÅrVecka,
+    LastDispatchDate.Veckodag
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/LastDispatchDate.qvd] (qvd);
+
+/*
+PB:
+LOAD
+    @PB.Date,
+    PB.Date,
+    PB.Vecka,
+    PB.År,
+    PB.Månad,
+    PB.Dag,
+    PB.Kvartal,
+    PB.VeckaÅr,
+    PB.ÅrVecka,
+    PB.ÅrMånad,
+    PB.Veckodag
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/PB.qvd]
+(qvd);
+*/
+
+MasterTimeTable:
+LOAD
+    %_REGTIME,
+    Timme,
+    Minut
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/MasterTimeTable.qvd] (qvd);
+
+///$tab S&OP
+Concatenate (DispatchOrder)
+
+LOAD
+	
+	//Left([CG_Name],3) & '|' & text(Num(Left(Week,4)-1)) &  text(Right(Week,2)) as @CG_PD_ÅrVecka, // "Orginal"
+   Left([CG_Name],3) as @CGID,
+    Cycle,
+ 	Num(text(Left(Cycle,4)) &  text(Right(Cycle,2))) as CycleID,
+    Week as Week_SOP,
+	Date(MakeWeekDate(Left(Week, 4), Right(Week, 2))) as %_REGDATE,
+    "Category Code" as Cat,
+    CG_Name as "CG Name",
+    "Planned DC Demand in Cube" as   "DC Demand (Cube)",
+    "Planned DC Demand in QTY" as  "DC Demand Plan",
+    "Week LY",
+	'SOP' as Source,
+	Week as %_SHORTR08,
+If(IsNum("LY DC Sales in QTY"), "LY DC Sales in QTY", 0)   as  "LY DC Demand (Qty)",
+// "LY DC Sales in QTY" as  "LY DC Demand (Qty)",
+    "Actual LY DC Sale in Cube" as "LY DC Demand (Cube)",
+    "Actual DC Demand in Cube",
+    "Actual DC Demand in QTY"
+    
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/FACT_SOP_report.qvd]
+(qvd)
+where Cycle > '2025-03' and "Category Code" < '9';
+
+
+Concatenate (Trip)
+Load Distinct
+[%_SHORTR08],
+[%_REGDATE] as @PlanDate
+Resident DispatchOrder
+Where Source='SOP';
+
+
+
+
+
+
+
+
+///$tab Manuella artikelfilter
+Manuella_artikelfilter:
+LOAD
+    @Artikel,
+    "Manuella artikelfilter"
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Manuella_artikelfilter.qvd] (qvd);
+
+
+///$tab RutePlan
+mp_KTOKD:
+Mapping
+LOAD * INLINE [
+KTOKD, KTOKD_text
+KUNA,	Post
+ZHUB,	Hub
+150,	Butik Franchise
+152,	Phonehouse Franchise
+160,	Butik
+161,	Phonehouse
+];
+
+[Customer]:
+LOAD 
+	*
+    WHERE KTOKD_text <> 'Övriga';
+    
+Load
+	 *
+	,ApplyMap('mp_KTOKD',KTOKD,'Övriga') as KTOKD_text
+;
+
+
+Load *
+	,"Hub/ButikId" as @Customer
+	,Postnummer&LAND1 as PostnummerLand;
+
+LOAD *
+,Replace(Postnummer_temp, ' ', '') as Postnummer;
+
+/*LOAD
+	@Customer,
+    KUNNR,
+    LAND1,
+    NAME1,
+    Ort,
+    //Replace(LTRIM(REPLACE(Postnummer,'0',' ')),' ', '0') as Postnummer,
+    If(match(LAND1,'NO','DK'), Right(Postnummer,4), Postnummer) as Postnummer,
+    SORTL,
+    KTOKD,
+    LIFNR,
+    Franchise    
+FROM [lib://Ruteplan DATA:DataFiles/Customer.qvd]
+(qvd);
+*/
+LOAD
+    
+    CUSTOMERCATEGORY,
+    ZZ_FRANCHISE,
+    RIGHT(NUM#(KUNNR),4) as "Hub/ButikId",
+    LAND1,
+    NAME1 as [Ship to party Name],
+    ORT01,
+    If(match(LAND1,'NO','DK'), Right(PSTLZ,4), PSTLZ) as Postnummer_temp,
+    SORTL,
+    STRAS,
+    KTOKD
+FROM [lib://Accesspoint:Qlik QVD store - File_(via_Direct_Access_gateway)/QVD/SAP/1_Extract/Stores_and_Hubs - KNA1 T077X.qvd]
+(qvd);
+
+
+
+[RutePlan]:
+LOAD
+// 	RowNo() as RadID,
+ 	DISTINCT @Customer,
+ 	[Shipping Point]
+// 	[Route schedule],
+// 	[Route schedule description],
+// 	[Route],
+// 	[GI Day],
+// 	[GI Time],
+// 	[Ship to party] as "Hub/ButikId",
+// 	[Ship to party Name],
+// 	[Shipping condition],
+// 	[Transport group],
+// 	[Transport group 2],
+// 	[Year],
+// 	[Period],
+// 	[SpecTT days],
+// 	[SpecTT hours],
+// 	[SpecTT minutes],
+// 	[Line number],
+//     [ArrivalDate],
+//     $(vTimeFormat(ArrivalDateTime)),
+//     [ShippingDate],
+//     $(vTimeFormat(ShippingDateTime)),
+//     $(vTimeFormat(CutOffTime))
+
+ FROM [lib://Ruteplan DATA:DataFiles/RutePlan.qvd]
+(qvd);
+
+/*
+Stores_and_Hubs:
+LOAD
+    QVD_line_created,
+    CUSTOMERCATEGORY,
+    ZZ_FRANCHISE,
+    MANDT,
+    NUM#(KUNNR) as "Hub/ButikId",
+    LAND1,
+    NAME1 as [Ship to party Name],
+    NAME2,
+    ORT01,
+    
+    If(match(LAND1,'NO','DK'), Right(PSTLZ,4), PSTLZ) as Postnummer,
+    REGIO,
+    SORTL,
+    STRAS,
+    KTOKD
+FROM [lib://Accesspoint:Qlik QVD store - File_(via_Direct_Access_gateway)/QVD/SAP/1_Extract/Stores_and_Hubs - KNA1 T077X.qvd]
+(qvd);
+
+*/
+
+///$tab Mappings, translation etc
+FieldNameMap:
+Mapping 
+LOAD 
+	 Upper(Trim(OldFieldName)) 	as Key
+	,Trim(NewFieldName) 		as Value
+FROM [lib://Analyse customer order prognosapp combine DATA:DataFiles/Translation.qvd] (qvd);
+
+RENAME Fields using FieldNameMap;
+
+// Translation:
+// LOAD 
+	 
+//  	 COLNAME as OldFieldName
+//     ,COLDEFN & ' (' & Lower(COLNAME) & ')' as NewFieldName
+// FROM $(path_QVD_Transform_Astro_Common)Translation.qvd(qvd) //Denna är inte  miljö beroende körs alltid från "Main/Hus ett"
+// Where COLLANG='eng';
+
+// FieldNameMap:
+// Mapping 
+// LOAD Upper(Trim(OldFieldName)) as Key
+// 	,Trim(NewFieldName) as Value
+// Resident Translation ;
+
+// Drop Table Translation;
+// CALL timeLog('Translation')
+
+
+///$tab Autonumber and *** Exit Script ***
+Rename Table DispatchOrder to Transactions;
+Autonumber DispatchOrderGroup.LineId.OldDef, @Artikel, %_Artikel, %_Trip.DEPDATE, %_SHORTR08, @PB.Date, @HubButik, %_REGDATE, %_REGTIME, @PD.ÅrVecka, @PlanDate;
+
+Exit Script;
+///$tab DispatchOrder_old
+Artikel:
+LOAD
+    Artikel,
+    @Artikel,
+    %_Artikel,
+    Artikel.RegDate,
+    Artikel.LastUpdateDate,
+    SU_längd_AST,
+    SU_bredd_AST,
+    SU_höjd_AST,
+    HU_längd_AST,
+    HU_bredd_AST,
+    HU_höjd_AST,
+    SU_vikt_AST,
+    SU_volym_AST,
+    HU_volym_AST_HU_LxBxH,
+    HU_vikt_AST_SUwghtXhuqty,
+    HU_volym_AST_LxBxH,
+    "HandlingUnitQty (huqty)",
+    Balance,
+    Har_saldo_Astro,
+    Beskrivning,
+    "Pick MHA (pmha)",
+    Zone,
+    "Buffer MHA (wmha)",
+    "Pref LdCT (wldct)",
+    PartWeight,
+    PartVolume,
+    "Qty in Full StUnit (cquant)",
+    "Qty/Level (noplevel)",
+    "Qty/Tote (SU)",
+    "Qty/Tray (SU)",
+    "Qty/Tote (HU)",
+    "Qty/Tray (HU)",
+    Kubskannad,
+    %_CGMId,
+    "partgrp2 (partgrp2)",
+    Partgrp2_grp,
+    FEFO,
+    "sernoprc (sernoprc)",
+    "Max Stackability, StUnits (l62stakp)",
+    "WCS/SAT (SU)",
+    "WCS/SAT (HU)",
+    CrossPack,
+    ArtStruktur,
+    ART_haft_saldo_NDC,
+    CGM_Desc.Label,
+    BoxTyp_SU,
+    "HandlingUnitWeight (e_huwght)",
+    "HandlingUnitVolume (e_huvol)",
+    "SingleUnitPalletizable (su_pallz)",
+    "HandlingUnitPalletizable (hu_pallz)",
+    L62T90flagga,
+    RegDate_L62T90,
+    UpdDate_L62T90,
+    PIM.STATUS,
+    PIM.ONLINEARTICLE_CODE,
+    PIM.ONLINEARTICLE_NAME,
+    PIM.GENERAL_ITEM_CATEGORY_GROUP,
+    RoundingProfile_Flagga
+//     MovingAvgPrice
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__Artikel.qvd]
+(qvd);
+
+Trip:
+LOAD
+    %_SHORTR08,
+    %_SHORTR08			as [TripId (ShortR08)],
+    PlanDate 			as @PlanDate,
+    PlanDate,
+    RouteSchedule,
+    TripSeq,
+    Trip,
+    "Car number",
+    ExternalTripId,
+    Trip.Status,
+    Trip.Status.Id,
+    StatusDate_Trip,
+    StopTime,
+    PB.DateTime,
+    @PB.Date,
+    PB.Time,
+    Departure.DateTime,
+    %_Trip.DEPDATE,
+    Departure.Date,
+    Departure.Time
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__Trip.qvd]
+(qvd);
+
+PlanDateCalendar:
+LOAD
+    Datum 				as @PlanDate,
+    Vecka				as PD.Vecka,
+    Vecka_jämförbar		as PD.Vecka_jämförbar,
+    År					as PD.År,
+    Månad				as PD.Månad,
+    ÅrMånad				as PD.ÅrMånad,
+    Dag					as PD.Dag,
+    MånadDag			as PD.MånadDag,
+    Kvartal				as PD.Kvartal,
+    VeckaÅr				as PD.VeckaÅr,
+    ÅrVecka				as PD.ÅrVecka,
+    [ÅrVecka]			as @PD.ÅrVecka,
+    Veckodag			as PD.Veckodag
+//     f_Månad,
+//     f_År,
+//     f_År_num,
+//     _FULL_LY,
+//     _FULL_TY,
+//     _YTD_TY,
+//     _YTD_LY,
+//     _FULL_LY_Fiscal,
+//     _FULL_TY_Fiscal,
+//     _YTD_TY_Fiscal,
+//     _YTD_LY_Fiscal,
+//     _FULL_TQ_TY,
+//     _FULL_TQ_LY,
+//     _FULL_PRQ,
+//     _QTD_TY,
+//     _QTD_LY,
+//     _PR_QTD,
+//     _FULL_TM_TY,
+//     _FULL_TM_LY,
+//     _FULL_PRM,
+//     _MTD_TY,
+//     _MTD_LY,
+//     _PR_MTD,
+//     _FULL_TW_TY,
+//     _FULL_TW_LY,
+//     _FULL_PRW,
+//     _WTD_TY,
+//     _PR_WTD,
+//     %_REGDATE,
+//     f_Quarter,
+//     f_Månad_Namn
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__MasterCalendar.qvd]
+(qvd);
+
+
+MasterCalendar:
+LOAD
+    Datum,
+    Vecka,
+    Vecka_jämförbar,
+    År,
+    Månad,
+    ÅrMånad,
+    Dag,
+    MånadDag,
+    Kvartal,
+    VeckaÅr,
+    ÅrVecka,
+    Veckodag,
+    f_Månad,
+    f_År,
+    f_År_num,
+    _FULL_LY,
+    _FULL_TY,
+    _YTD_TY,
+    _YTD_LY,
+    _FULL_LY_Fiscal,
+    _FULL_TY_Fiscal,
+    _YTD_TY_Fiscal,
+    _YTD_LY_Fiscal,
+    _FULL_TQ_TY,
+    _FULL_TQ_LY,
+    _FULL_PRQ,
+    _QTD_TY,
+    _QTD_LY,
+    _PR_QTD,
+    _FULL_TM_TY,
+    _FULL_TM_LY,
+    _FULL_PRM,
+    _MTD_TY,
+    _MTD_LY,
+    _PR_MTD,
+    _FULL_TW_TY,
+    _FULL_TW_LY,
+    _FULL_PRW,
+    _WTD_TY,
+    _PR_WTD,
+    %_REGDATE,
+    f_Quarter,
+    f_Månad_Namn
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__MasterCalendar.qvd]
+(qvd);
+
+PB_date_445:
+LOAD
+    @PB.Date,
+//    PB.Date,
+    PB_445.Date,
+    PB_445.DayOfMonth,
+    PB_445.DayOfQuarter,
+    PB_445.DayOfYear,
+    PB_445.Month,
+    PB_445.MonthOfQuarter,
+    PB_445.MonthStart,
+    PB_445.Quarter,
+    PB_445.QuarterStart,
+    PB_445.Week,
+    PB_445.WeekDay,
+    PB_445.WeekOfMonth,
+    PB_445.WeekStart,
+    PB_445.Year,
+    PB_445.YearMonth,
+    PB_445.YearQuarter,
+    PB_445.YearStart,
+    PB_445.YearWeek
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__PB_date_445.qvd]
+(qvd);
+
+LastDispatchDate:
+LOAD
+    %_Trip.DEPDATE,
+    LastDispatchDate.Vecka,
+    LastDispatchDate.År,
+    LastDispatchDate.Månad,
+    LastDispatchDate.Dag,
+    LastDispatchDate.Kvartal,
+    LastDispatchDate.VeckaÅr,
+    LastDispatchDate.ÅrVecka,
+    LastDispatchDate.Veckodag
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__LastDispatchDate.qvd]
+(qvd);
+
+CGM:
+LOAD
+    CGM,
+    %_CGMId,
+   // CGM as SP.Category_Code,
+    CGM_flagga,
+    CGM_KategoriId,
+    CGM_Kategori_namn,
+    CGM_Kategori,
+    CGM_GruppId,
+    CGM_Grupp_namn,
+    CGM_Grupp,
+    CGM_ModellId,
+    CGM_Modell_namn,
+    CGM_Modell
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__CGM.qvd]
+(qvd);
+
+LOAD
+    %_REGDATE,
+    WeekBased445_EG.Date,
+    WeekBased445_EG.DayOfMonth,
+    WeekBased445_EG.DayOfQuarter,
+    WeekBased445_EG.DayOfYear,
+    WeekBased445_EG.Month,
+    WeekBased445_EG.MonthOfQuarter,
+    WeekBased445_EG.MonthStart,
+    WeekBased445_EG.Quarter,
+    WeekBased445_EG.QuarterStart,
+    WeekBased445_EG.Week,
+    WeekBased445_EG.WeekDay,
+    WeekBased445_EG.WeekOfMonth,
+    WeekBased445_EG.WeekStart,
+    WeekBased445_EG.Year,
+    WeekBased445_EG.YearMonth,
+    WeekBased445_EG.YearQuarter,
+    WeekBased445_EG.YearStart,
+    WeekBased445_EG.YearWeek
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__WeekBased445_EG.qvd]
+(qvd);
+
+
+
+MasterTimeTable:
+LOAD
+    %_REGTIME,
+    Timme,
+    Minut
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__MasterTimeTable.qvd]
+(qvd);
+
+Manuella_artikelfilter:
+LOAD
+    "Manuella artikelfilter",
+    @Artikel
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__Manuella_artikelfilter.qvd]
+(qvd);
+
+PB:
+Load * From [lib://Analyse customer order DATA:DataFiles/Prg__PB.qvd] (qvd);
+
+HubButik:
+Load * From [lib://Analyse customer order DATA:DataFiles/Prg__HubButik.qvd] (qvd);
+
+// Valutakurser:
+// Load * From [lib://Analyse customer order DATA:DataFiles/Valutakurser.qvd] (qvd);
+
+Transportör:
+LOAD
+    %_SHORTR08,
+    RegNr,
+    Transportör,
+    CARRIERW,
+    CARRIERH,
+    BOOKEDLM
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__Transportör.qvd] (qvd);
+
+Vendor:
+LOAD
+    @Artikel,
+    VendorId,
+    Vendor,
+    Vendor_City,
+    Vendor_Country,
+    Vendor_Zip,
+    "Vendor_Planned Delivery-time in Days",
+    VendorGroupId,
+    VendorGroup,
+    VendorGroup_Country
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__Vendor.qvd]
+(qvd);
+
+DispatchOrder:
+LOAD
+    Ordernummer
+    ,%_REGDATE
+    ,%_REGTIME
+    ,"Status (ordstat)"
+    ,OrdertypId
+    ,Ordertyp
+    ,IF(KundtypOrder = 'Residue', 'Restorder', KundtypOrder) as KundtypOrder
+    ,Campaign
+    ,CampaignGroup
+    ,"Hub/Butik"
+    ,"Hub/ButikId"
+    ,@HubButik
+    ,Land
+    ,"OrderLine (ordline)"
+    ,%_SHORTR08
+    ,%_Artikel
+    ,"Status (linestat)"
+    ,"Actual Vol (realvol)"
+    ,"Del Qty (delquant)"
+    ,DispatchOrderGroup.LineId.OldDef
+//    ,PostNr as PostNr_f_karta
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__DispatchOrder_20*.qvd] (qvd)
+;
+
+Concatenate (DispatchOrder)
+LOAD
+    Ordernummer
+    ,%_REGDATE
+    ,%_REGTIME
+    ,"Status (ordstat)"
+    ,OrdertypId
+    ,Ordertyp
+    ,IF(KundtypOrder = 'Residue', 'Restorder', KundtypOrder) as KundtypOrder
+    ,Campaign
+    ,CampaignGroup
+    ,"Hub/Butik"
+    ,"Hub/ButikId"
+    ,@HubButik
+    ,Land
+    ,"OrderLine (ordline)"
+    ,%_SHORTR08
+    ,%_Artikel
+    ,"Status (linestat)"
+    ,"Actual Vol (realvol)"
+    ,"Del Qty (delquant)"
+    ,DispatchOrderGroup.LineId.OldDef
+//    ,PostNr as PostNr_f_karta
+FROM [lib://Analyse customer order DATA:DataFiles/Prg__DispatchOrder_hist.qvd] (qvd)
+where %_REGDATE >='2020-01-01';
+
+
+
+
+Autonumber DispatchOrderGroup.LineId.OldDef, @Artikel, %_CGMId, %_Artikel, %_Trip.DEPDATE, %_SHORTR08, @PB.Date, @HubButik, %_REGDATE, %_REGTIME, @PD.ÅrVecka;
+
+
